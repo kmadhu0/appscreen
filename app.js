@@ -111,7 +111,7 @@ let _saveTimer = null;
 // Side-preview cache: adjacent screenshots don't change while editing the selected one,
 // so we cache their rendered bitmaps and skip re-rendering unless they become active
 // or a global setting (language, device) changes.
-const _sidePreviewCache = new Map(); // screenshotIndex -> { canvas, key }
+const _sidePreviewCache = new Map(); // screenshotIndex -> { screenshot, canvas, key }
 function _sidePreviewCacheKey(dims) {
     return `${state.currentLanguage}:${dims.width}:${dims.height}`;
 }
@@ -6858,6 +6858,9 @@ function _renderCanvas() {
     canvas.style.width = (dims.width * scale) + 'px';
     canvas.style.height = (dims.height * scale) + 'px';
 
+    // A background image may be absent or transparent; never retain the prior frame.
+    ctx.clearRect(0, 0, dims.width, dims.height);
+
     // The selected screenshot is being edited — its cached side preview is stale
     _sidePreviewCache.delete(state.selectedIndex);
 
@@ -7108,13 +7111,14 @@ function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewS
     const cacheKey = _sidePreviewCacheKey(dims);
     if (index !== state.selectedIndex) {
         const cached = _sidePreviewCache.get(index);
-        if (cached && cached.key === cacheKey) {
+        if (cached && cached.screenshot === screenshot && cached.key === cacheKey) {
             if (targetCanvas.width !== renderW || targetCanvas.height !== renderH) {
                 targetCanvas.width = renderW;
                 targetCanvas.height = renderH;
                 targetCanvas.style.width = renderW + 'px';
                 targetCanvas.style.height = renderH + 'px';
             }
+            targetCtx.clearRect(0, 0, renderW, renderH);
             targetCtx.drawImage(cached.canvas, 0, 0);
             return;
         }
@@ -7151,13 +7155,15 @@ function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewS
     // Draw screenshot - 3D if active for this screenshot, otherwise 2D
     const settings = screenshot.screenshot;
     const use3D = settings.use3D || false;
+    let cacheable = !!img && !use3D;
 
     if (img) {
         if (use3D && typeof renderThreeJSForScreenshot === 'function' && phoneModelLoaded) {
             // 3D renderer manages its own canvas; restore scale before handing off
             targetCtx.restore();
-            renderThreeJSForScreenshot(targetCanvas, renderW, renderH, index);
-            return;
+            cacheable = renderThreeJSForScreenshot(targetCanvas, renderW, renderH, index) !== false;
+            targetCtx.save();
+            targetCtx.scale(previewScale, previewScale);
         } else {
             // Draw 2D screenshot using localized image
             drawScreenshotToContext(targetCtx, dims, img, settings);
@@ -7181,12 +7187,12 @@ function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewS
     targetCtx.restore();
 
     // Cache this render for future frames (only for non-selected screenshots)
-    if (index !== state.selectedIndex) {
+    if (index !== state.selectedIndex && cacheable) {
         const cacheCanvas = document.createElement('canvas');
         cacheCanvas.width = renderW;
         cacheCanvas.height = renderH;
         cacheCanvas.getContext('2d').drawImage(targetCanvas, 0, 0);
-        _sidePreviewCache.set(index, { canvas: cacheCanvas, key: cacheKey });
+        _sidePreviewCache.set(index, { screenshot, canvas: cacheCanvas, key: cacheKey });
     }
 }
 

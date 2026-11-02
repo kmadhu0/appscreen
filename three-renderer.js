@@ -811,8 +811,8 @@ function renderThreeJSToCanvas(targetCanvas, width, height) {
 
 // Render 3D for a specific screenshot index (used for side previews)
 function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex) {
-    if (!threeRenderer || !threeScene || !threeCamera) return;
-    if (typeof state === 'undefined' || !state.screenshots[screenshotIndex]) return;
+    if (!threeRenderer || !threeScene || !threeCamera) return false;
+    if (typeof state === 'undefined' || !state.screenshots[screenshotIndex]) return false;
 
     const screenshot = state.screenshots[screenshotIndex];
     const ss = screenshot.screenshot;
@@ -843,7 +843,7 @@ function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex
                     updateCanvas();
                 }
             });
-            return;
+            return false;
         }
         pivotToUse = cached.pivot;
         screenPlaneToUse = cached.screenPlane;
@@ -970,6 +970,7 @@ function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex
             phonePivot.visible = true;
         }
     }
+    return true;
 }
 
 // Show/hide Three.js container
